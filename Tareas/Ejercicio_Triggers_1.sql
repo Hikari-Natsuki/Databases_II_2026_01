@@ -1,95 +1,5 @@
-CREATE DATABASE Ejercicio 
-GO
-
 USE Ejercicio 
 GO
-
--- Tabla de productos
-    CREATE TABLE Productos (
-    ProductoID INT PRIMARY KEY IDENTITY(1,1),
-    Nombre NVARCHAR (40),
-    Precio INT, 
-    Activo NVARCHAR (10)
-)
-
---Tabla de Empleados 
-CREATE TABLE Empleados (
-    EmpleadoID INT PRIMARY KEY IDENTITY(1,1),
-    Nombre NVARCHAR (40),
-    Email NVARCHAR (60),
-    Activo NVARCHAR (10) 
-)
-
--- Tablas de Transportadora
-CREATE TABLE Transportadora (
-    TransportadoraID INT PRIMARY KEY IDENTITY(1,1),
-    Nombre NVARCHAR (40),
-    Direccion NVARCHAR (100),
-    Telefono NVARCHAR (40),
-)
-
--- Tabla de clientes
-CREATE TABLE Clientes (
-    ClienteID INT PRIMARY KEY IDENTITY(1,1),
-    Nombre NVARCHAR(100),
-    Email NVARCHAR(100)
-);
-
--- Tabla de pedidos
-CREATE TABLE Pedidos (
-    PedidoID INT PRIMARY KEY IDENTITY(1,1),
-	ProductoID INT,
-    ClienteID INT,
-	EmpleadoID INT,
-    FechaPedido DATE,
-    Total DECIMAL(10,2),
-    FOREIGN KEY (ClienteID) REFERENCES Clientes(ClienteID),
-	FOREIGN KEY (ProductoID) REFERENCES Productos(ProductoID),
-	FOREIGN KEY (EmpleadoID) REFERENCES Empleados(EmpleadoID)
-)
-
--- Tabla DetallePedidos
-CREATE TABLE DetallePedidos (
-    DetalleID INT PRIMARY KEY IDENTITY (1,1),
-    PedidoID INT,
-    ProductoID INT,
-    Cantidad INT,
-    PrecioUnitario DECIMAL(10,2),
-    Subtotal AS (Cantidad * PrecioUnitario),
-    FOREIGN KEY (PedidoID) REFERENCES Pedidos(PedidoID),
-    FOREIGN KEY (ProductoID) REFERENCES Productos(ProductoID)
-)
-
--- Tabla de Inventario 
-CREATE TABLE Inventario (
-    InventarioID INT PRIMARY KEY IDENTITY(1,1),
-    ProductoID INT,
-    StockActual INT,
-    StockMinimo INT,
-    FechaActualiizacion DATETIME DEFAULT GETDATE(),
-    FOREIGN KEY (ProductoID) REFERENCES Productos(ProductoID)
-)
-
--- Tabla de Pagos 
-CREATE TABLE Pagos (
-    PagoID INT PRIMARY KEY IDENTITY(1,1),
-    PedidoID INT,
-    FechaPago DATE,
-    ValorPagado DECIMAL (10,2),
-    MetodoPago NVARCHAR (40),
-    FOREIGN KEY (PedidoID) REFERENCES Pedidos(PedidoID)
-)
--- Tabla de Envios 
-CREATE TABLE Envios (
-    EnvioID INT PRIMARY KEY IDENTITY (1,1),
-    PedidoID INT,
-    TransportadoraID INT,
-    FechaEnvio DATE,
-    Direccion NVARCHAR (100),
-    EstadoEnvio NVARCHAR (40),
-    FOREIGN KEY (PedidoID) REFERENCES Pedidos(PedidoID)
-)
-
 /*
 1- Cuando se inserte, actualice o elimine un registro en DetallePedidos, 
 se debe recalcular el campo Pedidos.
@@ -153,7 +63,37 @@ BEGIN
     FROM inserted AS I INNER JOIN Inventario AS INV ON I.ProductoID = INV.ProductoID
 END
 
+/*
+4) Alerta de stock mínimo
+Cuando el inventario se actualice y el StockActual sea menor que StockMinimo, 
+registrar un mensaje en la tabla AuditoriaPedidos:
+*/ 
 
+CREATE TRIGGER trg_AuditoriaActualizarStock
+ON Inventario
+AFTER UPDATE
+AS 
+BEGIN 
+    INSERT INTO AuditoriaPedidos (Operacion, Mensaje)
+    SELECT 'Alerta de stock', 'Stock bajo para el producto(ID): ' + I.ProductoID
+    FROM inserted I
+    WHERE I.StockActual < I.StockMinimo;
+END
+
+/*
+Trigger 5 — Registrar fecha de actualización del pedido
+Cuando un pedido sea modificado, actualizar automáticamente:
+Pedidos.FechaActualizacion = GETDATE()
+*/
+
+CREATE TRIGGER trg_ActualizarFecha
+ON Pedidos
+AFTER UPDATE
+AS 
+BEGIN
+    UPDATE P SET P.FechaActualizacion = GETDATE()
+    FROM Pedidos AS P INNER JOIN inserted AS I ON P.PedidoID = I.PedidoID;
+END
 
 -- Miguel Villegas 
 -- Julian Higuita
