@@ -9,23 +9,18 @@ Total como la suma de los subtotales del pedido.
 CREATE TRIGGER trg_ActualizarTotal
 ON DetallePedidos
 AFTER INSERT, UPDATE, DELETE
-AS 
-BEGIN 
-    -- INSERTED 
-    UPDATE P SET P.Total = SUM(I.Subtotal) -- No se usa el WHERE porque ya comprobamos que tiene el mismo ID
-    FROM Pedidos AS P INNER JOIN inserted AS I ON P.PedidoID = I.PedidoID -- acá
-
-    -- UPDATE              S Viejo      S Nuevo
-    UPDATE P SET Total = (D.Subtotal - I.Subtotal)
-    FROM Pedidos AS P 
-    INNER JOIN deleted AS D ON P.PedidoID = D.PedidoID --  Tomar el subtotal anterior
-    INNER JOIN inserted AS I ON D.PedidoID = I.PedidoID -- Tomar el nuevo subtotal
-    
-    -- Delete 
-    UPDATE P SET P.Total = (P.Total - D.Subtotal)
-    FROM Pedidos AS P INNER JOIN deleted AS D ON P.PedidoID = D.PedidoID
+AS
+BEGIN
+    UPDATE P
+    SET P.Total = (SELECT SUM(DP.Subtotal) FROM DetallePedidos AS DP
+        WHERE DP.PedidoID = P.PedidoID
+    )
+    FROM Pedidos AS P WHERE P.PedidoID IN (
+        SELECT PedidoID FROM inserted
+        UNION
+        SELECT PedidoID FROM deleted
+    );
 END
-
 /*
 2. Calcular subtotal automáticamente
 Después de insertar registros en DetallePedidos, calcular:
@@ -56,6 +51,7 @@ BEGIN
     BEGIN 
         RAISERROR('El stock actual es menor a la cantidad solicitada', 15, 1)
         ROLLBACK TRANSACTION
+        RETURN
     END
 
     -- Actualizar el stock
@@ -95,5 +91,37 @@ BEGIN
     FROM Pedidos AS P INNER JOIN inserted AS I ON P.PedidoID = I.PedidoID;
 END
 
+
+-- INSERTAR DATOS
+
+INSERT INTO Productos VALUES
+('Zapatos', 500000, '1'),
+('Camisas', 55000, '1'),
+('Pantalones', 100000, '1')
+
+INSERT INTO Inventario (ProductoID, StockActual, StockMinimo)VALUES
+(1, 50, 10),
+(2, 100, 15),
+(3, 25, 20)
+
+INSERT INTO Pedidos (ProductoID, FechaPedido)
+VALUES
+(2, '2026-02-23'),
+(1, '2026-02-23')
+
+
+INSERT INTO DetallePedidos (PedidoID, ProductoID, Cantidad, PrecioUnitario)VALUES
+(1, 1, 2, 500000),
+(2, 1, 2, 500000)
+
+
+-- ACTUALIZAR DETALLEPEDIDOS
+UPDATE DetallePedidos SET Cantidad = 3 WHERE DetalleID = 1
+
+SELECT * FROM DetallePedidos
+SELECT * FROM Pedidos
+SELECT * FROM Inventario
+
+DROP DATABASE Ejercicio
 -- Miguel Villegas 
 -- Julian Higuita
